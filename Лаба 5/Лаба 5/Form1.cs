@@ -13,7 +13,7 @@ namespace Лаба_5
 {
     public partial class Form1 : Form
     {
-
+        public int active_id;
         private readonly string _connStr = new NpgsqlConnectionStringBuilder
         {
             /*заполнение через файл конфигов*/
@@ -38,7 +38,7 @@ namespace Лаба_5
             Initalaze1();
             show1();
             Initalaze2();
-            show2();
+            //show2();
         }
 
 
@@ -47,6 +47,9 @@ namespace Лаба_5
 
             dgv1.Columns.Add("id", "id");
             dgv1.Columns["id"].Visible = false;
+
+            dgv1.Columns.Add("id_bank", "id_bank");
+            dgv1.Columns["id_bank"].Visible = false;
 
             dgv1.Columns.Add("name_pr", "Название поставщика");
 
@@ -88,7 +91,7 @@ namespace Лаба_5
                     while (reader.Read())
                     {
                         /*строки заполняем*/
-                        var rovId = dgv1.Rows.Add(reader["id"], reader["name_pr"],
+                        var rovId = dgv1.Rows.Add(reader["id"],reader["id_bank"], reader["name_pr"],
                             reader["code_payment"], reader["count_delays"], reader["data_coop"]);
 
 
@@ -118,7 +121,7 @@ namespace Лаба_5
             dgv2.Columns.Add("active", "Активы");
         }
 
-        private void show2()
+        private void show2(int id)
         {
             using (var conn = new NpgsqlConnection(_connStr))
             {
@@ -135,9 +138,10 @@ namespace Лаба_5
                     using (var sqlCommand = new NpgsqlCommand
                     {
                         Connection = conn,
-                        CommandText = @"SELECT * FROM bank"
+                        CommandText = @"SELECT * FROM bank WHERE id = @id"
                     })
                     {
+                        sqlCommand.Parameters.AddWithValue("@id", id);
                         var reader = sqlCommand.ExecuteReader();
                         while (reader.Read())
                         {
@@ -245,7 +249,11 @@ namespace Лаба_5
                     dgv1.Rows[e.RowIndex].Tag = prData;
 
                     if (!newid.HasValue)
-                        dgv1.Rows[e.RowIndex].Cells["id"].Value = sqlCommand.ExecuteReader().Read();
+                    {
+                        var reader = sqlCommand.ExecuteReader();
+                        reader.Read();
+                        dgv1.Rows[e.RowIndex].Cells["id"].Value = reader[0];
+                    }
                     else
                         sqlCommand.ExecuteNonQuery();
                 }
@@ -378,9 +386,33 @@ namespace Лаба_5
                     dgv2.Rows[e.RowIndex].Tag = prData;
 
                     if (!newid.HasValue)
-                        dgv2.Rows[e.RowIndex].Cells["id"].Value = sqlCommand.ExecuteReader().Read();
+                    {
+                        var reader = sqlCommand.ExecuteReader();
+                        reader.Read();
+                        dgv2.Rows[e.RowIndex].Cells["id"].Value = reader[0];
+                        dgv1.Rows[active_id].Cells["id_bank"].Value = dgv2.Rows[e.RowIndex].Cells["id"].Value;
+                    }
                     else
+                    {
                         sqlCommand.ExecuteNonQuery();
+                    }
+                }
+                conn.Close();
+                if (!newid.HasValue)
+                {
+                    conn.Open();
+                    using (var sqlCommand1 = new NpgsqlCommand
+                    {
+                        Connection = conn,
+                        CommandText = @"UPDATE provider 
+                                    SET id_bank=@id_bank
+                                    WHERE id = @newid"
+                    })
+                    {
+                        sqlCommand1.Parameters.AddWithValue("@id_bank", dgv2.Rows[e.RowIndex].Cells["id"].Value);
+                        sqlCommand1.Parameters.AddWithValue("@newid", dgv1.Rows[active_id].Cells["id"].Value);
+                        sqlCommand1.ExecuteNonQuery();
+                    }
                 }
             }
         }
@@ -466,6 +498,24 @@ namespace Лаба_5
                 {
                     dgv2.Rows.Remove(dgv2.CurrentRow);
                 }
+            }
+        }
+
+        private void dgv1_CellClick(object sender, DataGridViewCellEventArgs e)
+        {
+            dgv2.Rows.Clear();
+            active_id = e.RowIndex;
+            try
+            {
+                var id = (int?)dgv1.Rows[e.RowIndex].Cells["id_bank"].Value;
+                if (id.HasValue)
+                {
+                    show2((int)dgv1.Rows[e.RowIndex].Cells["id_bank"].Value);
+                }
+            }
+            catch
+            {
+
             }
         }
     }
